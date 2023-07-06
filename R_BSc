@@ -1,0 +1,330 @@
+Below is the code used in my BSc statistical analysis (version 4.0.0, R Core Team 2021).
+
+options(scipen=999)
+nvc<-read.csv("1STAIM2.csv",stringsAsFactors = F)
+
+#exploratory analysis of dataset
+View(nvc)
+str(nvc)
+summary(nvc)
+levels(nvc$NVC.Species)
+unique(nvc)
+
+#basic sum species richness
+install.packages()
+library("vegan")
+data("BCI")
+diversity(BCI, index="shannon")
+fisher.alpha(BCI)
+spa <- specaccum(BCI)
+plot(spa)
+mod <- decorana(BCI)
+plot(mod)
+
+#import nvc summary
+nvc.summary<-read.csv("nvccompletesummary.csv")
+View(nvc.summary)
+str(nvc.summary)
+mean(nvc.summary$shannon)
+max(nvc.summary$shannon)
+min(nvc.summary$shannon)
+
+#mawgraph
+maw<-read.csv("MAWDNARgis - Copy.csv")
+ggplot(data=subset(maw, 
+CorrieCode=="2"))+geom_bar(aes(x=SPECIES,fill=Gender),binwidth=0.5)+scale_fill_viridis_c()
+ggplot(data=subset(maw, 
+CorrieCode=="3"))+geom_bar(aes(x=SPECIES,fill=..x..),binwidth=0.5)+scale_fill_viridis_c()
+74
+ggplot(data=subset(maw, 
+CorrieCode=="4"))+geom_bar(aes(x=SPECIES,fill=..x..),binwidth=0.5)+scale_fill_viridis_c()
+
+#dbp2<-read.csv("Deer - CopyR.csv")
+#view(dbp2)
+#install.packages("tidyverse")
+library(tidyverse)
+
+#calculate mean for deer browing pressure
+dbp.summ <- dbp2 %>% group_by(CorrieCode) %>% 
+summarise(AverageM=mean(M_Dung_p_plot,na.rm=T),
+ AverageJAS=mean(J_A_S_Dung_p_plot,na.rm=T))
+
+#calculate standard error for deer browsing pressure
+dbp.se <- dbp2 %>% group_by(CorrieCode) %>% 
+summarise(SE.M=sd(M_Dung_p_plot,na.rm=T)/sqrt(n()),
+ SE.JAS=sd(J_A_S_Dung_p_plot,na.rm=T)/sqrt(n()))
+dbp.summ <- left_join(dbp.summ,dbp.se,by="CorrieCode")
+
+#calculate mean and standard error for both time periods together
+tmp<- rbind(dbp2 %>% select(CorrieCode,M_Dung_p_plot) %>% rename(dung=M_Dung_p_plot),
+ dbp2 %>% select(CorrieCode,J_A_S_Dung_p_plot) %>% rename(dung=J_A_S_Dung_p_plot))
+dbp.summ2 <- tmp %>% group_by(CorrieCode) %>% summarise(Average=mean(dung,na.rm=T ))
+dbp.se2<-tmp %>% group_by(CorrieCode) %>% summarise(se=sd(dung,na.rm=T )/sqrt(n()))
+dbp.summ2<- left_join(dbp.summ2,dbp.se2,by="CorrieCode")
+dbp.summ<-left_join(dbp.summ,dbp.summ2,by="CorrieCode")
+
+#leftjoin average dbp to hu
+hu<- left_join(hu,dbp.summ2 %>% dplyr::select(CorrieCode, Average),by="CorrieCode")
+
+#create dataframe to calculate shannon index
+tmp <- nvc %>% select(NVC.Community.or.sub.community.code,NVC.Species,DOMIN)
+
+#tmp <-nvc[,c("NVC.Community.or.sub.community.code","NVC.Species","DOMIN")]
+colnames(tmp) <- c("nvcCode","Species","Dominance")
+75
+
+#tmp<-as.character(tmp)
+#tmp$Dominance<- as.character(tmp$Dominance)
+#change na TO
+#tmp[is.na(tmp$Dominance),"Dominance"]
+#tmp$Dominance<-as.numeric(tmp$Dominance)
+#reshape to "wide" format and replace NAs with 0s 
+nvc.shannon<-tibble(reshape(tmp,idvar = 
+"nvcCode",v.names="Dominance",timevar="Species",direction="wide"))
+nvc.shannon[is.na(nvc.shannon)]<-0
+rm(tmp)
+
+#nvc.shannon[,2:ncol(nvc.shannon)]<-as.numeric(as.character(nvc.shannon[,2:ncol(nvc.shannon)]))
+#create nvc summary dataframe
+nvc.summary<-data.frame(nvc.shannon$nvcCode)
+colnames(nvc.summary) <- "Code"
+nvc.summary$shannon<- diversity(nvc.shannon[,2:ncol(nvc.shannon)],index="shannon")
+
+#calculate percent cover of flowering species
+tmp1 <- data.frame(nvc$NVC.Community.or.sub.community.code,nvc$NVC.Species,nvc$DOMIN, 
+nvc$Flowering.not.flowering, nvc$Relevant.for.b..monticola, nvc$Original.new.species, 
+nvc$Presence, nvc$Insect.Pollinated)
+colnames(tmp1) <-
+c("nvcCode","Species","Dominance","flowering","BMonticola","Original","Presence","InsectPollinat
+ed")
+
+#calculate alpha diversity
+tmp2<-tmp1 %>% group_by(nvcCode) %>% summarise(alpha=sum(n())) %>% 
+rename(Code=nvcCode)
+nvc.summary<-left_join(nvc.summary,tmp2,by="Code")
+rm(tmp2)
+
+#create new column multiplying dominance and flowering
+76
+tmp1$dom.flower<- tmp1$Dominance*tmp1$flowering
+tmp1$dom.BMonticola<- tmp1$Dominance*tmp1$BMonticola
+tmp1$dom.Original<- tmp1$Dominance*tmp1$Original
+tmp1$dom.Presence<- tmp1$Dominance*tmp1$Presence
+tmp1$dom.InsectPollinated<- tmp1$Dominance*tmp1$InsectPollinated
+
+#summarise maximum dominance flowering value per nvc
+tmp2 <- tmp1 %>% group_by(nvcCode) %>% summarise(Presence=max(dom.Presence,na.rm=T)) 
+%>% rename(Code=nvcCode)
+nvc.summary<- left_join(nvc.summary,tmp2,by="Code")
+tmp2 <- tmp1 %>% group_by(nvcCode) %>% summarise(flowering=max(dom.flower,na.rm=T)) %>% 
+rename(Code=nvcCode)
+nvc.summary<- left_join(nvc.summary,tmp2,by="Code")
+tmp3 <- tmp1 %>% group_by(nvcCode) %>% 
+summarise(InsectPollinated=max(dom.InsectPollinated,na.rm=T)) %>% rename(Code=nvcCode)
+nvc.summary<- left_join(nvc.summary,tmp3,by="Code")
+tmp4 <- tmp1 %>% group_by(nvcCode) %>% 
+summarise(BMonticola=max(dom.BMonticola,na.rm=T)) %>% rename(Code=nvcCode)
+nvc.summary<- left_join(nvc.summary,tmp4,by="Code")
+rm(tmp4)
+
+#add column of percentage cover
+nvc.summary[nvc.summary$flowering==10,"flower.perc"]<-95.5
+nvc.summary[nvc.summary$flowering==9,"flower.perc"]<-83
+nvc.summary[nvc.summary$flowering==8,"flower.perc"]<-63
+nvc.summary[nvc.summary$flowering==7,"flower.perc"]<-42
+nvc.summary[nvc.summary$flowering==6,"flower.perc"]<-29.5
+nvc.summary[nvc.summary$flowering==5,"flower.perc"]<-18
+nvc.summary[nvc.summary$flowering==4,"flower.perc"]<-7
+nvc.summary[nvc.summary$flowering==3,"flower.perc"]<-3
+nvc.summary[nvc.summary$flowering==2,"flower.perc"]<-2
+nvc.summary[nvc.summary$flowering==1,"flower.perc"]<-1
+nvc.summary[nvc.summary$flowering==0,"flower.perc"]<-0
+
+#add column percent cover BMON
+77
+nvc.summary[nvc.summary$BMonticola==10,"BMonticola.perc"]<-95.5
+nvc.summary[nvc.summary$BMonticola==9,"BMonticola.perc"]<-83
+nvc.summary[nvc.summary$BMonticola==8,"BMonticola.perc"]<-63
+nvc.summary[nvc.summary$BMonticola==7,"BMonticola.perc"]<-42
+nvc.summary[nvc.summary$BMonticola==6,"BMonticola.perc"]<-29.5
+nvc.summary[nvc.summary$BMonticola==5,"BMonticola.perc"]<-18
+nvc.summary[nvc.summary$BMonticola==4,"BMonticola.perc"]<-7
+nvc.summary[nvc.summary$BMonticola==3,"BMonticola.perc"]<-3
+nvc.summary[nvc.summary$BMonticola==2,"BMonticola.perc"]<-2
+nvc.summary[nvc.summary$BMonticola==1,"BMonticola.perc"]<-1
+nvc.summary[nvc.summary$BMonticola==0,"BMonticola.perc"]<-0
+
+#to add column of percent cover entomophilous
+nvc.summary[nvc.summary$InsectPollinated==10,"entomophilous.perc"]<-95.5
+nvc.summary[nvc.summary$InsectPollinated==9,"entomophilous.perc"]<-83
+nvc.summary[nvc.summary$InsectPollinated==8,"entomophilous.perc"]<-63
+nvc.summary[nvc.summary$InsectPollinated==7,"entomophilous.perc"]<-42
+nvc.summary[nvc.summary$InsectPollinated==6,"entomophilous.perc"]<-29.5
+nvc.summary[nvc.summary$InsectPollinated==5,"entomophilous.perc"]<-18
+nvc.summary[nvc.summary$InsectPollinated==4,"entomophilous.perc"]<-7
+nvc.summary[nvc.summary$InsectPollinated==3,"entomophilous.perc"]<-3
+nvc.summary[nvc.summary$InsectPollinated==2,"entomophilous.perc"]<-2
+nvc.summary[nvc.summary$InsectPollinated==1,"entomophilous.perc"]<-1
+nvc.summary[nvc.summary$InsectPollinated==0,"entomophilous.perc"]<-0
+rm(tmp1,tmp2)
+
+#export tables
+write.csv(nvc.summary,"C:\\Users\\niamh\\OneDrive - University of 
+Dundee\\Documents\\EV41004 Dissertation\\nvccompletesummary.csv")
+write.csv(hu,"C:\\Users\\niamh\\OneDrive - University of Dundee\\Documents\\EV41004 
+Dissertation\\huwithcompletesummary.csv")
+78
+write.csv(dbp.summ,"C:\\Users\\niamh\\OneDrive - University of Dundee\\Documents\\EV41004 
+Dissertation\\dbp.summ.csv")
+
+#import deer data
+dbp<-read.csv("Deer.csv",stringsAsFactors = F)
+View(dbp)
+str(dbp)
+summary(dbp)
+
+#import habitat units data
+hu<-read.csv("huwithcompletesummary.csv",stringsAsFactors = F)
+View(hu)
+str(hu)
+summary(hu)
+hu<- left_join(hu,dbp,by="CorrieCode")
+hu<- left_join(hu,nvc.summary,by="Code")
+
+#calculate average per habit unit
+hu$HabitatCode <- extract_numeric(hu$HabitatUnit)
+
+#correlation analysis
+#hu<-read.csv("huwithcompletesummary.csv",stringsAsFactors = F)
+#View(hu)
+#str(hu)
+cor.test(nvc.summary$shannon,nvc.summary$alpha, method="pearson", 
+use="pairwise.complete.obs")
+cor.test(nvc.summary$shannon,nvc.summary$InsectPollinated, method="pearson", 
+use="pairwise.complete.obs")
+cor.test(nvc.summary$shannon,nvc.summary$BMonticola, method="pearson", 
+use="pairwise.complete.obs")
+cor.test(nvc.summary$shannon,nvc.summary$flowering, method="pearson", 
+use="pairwise.complete.obs")
+
+#ANOVA analysis hu
+cc.m1<-aov(hu$shannon~hu$CorrieCode)
+79
+summary(cc.m1)
+par(mfrow=c(2,2))
+plot(cc.m1)
+cc.m2<-aov(hu$InsectPollinated~hu$CorrieCode)
+summary(cc.m2)
+par(mfrow=c(2,2))
+plot(cc.m2)
+cc.m3<-aov(hu$BMonticola~hu$CorrieCode)
+summary(cc.m3)
+par(mfrow=c(2,2))
+plot(cc.m3)
+cc.m4<-aov(hu$flowering~hu$CorrieCode)
+summary(cc.m4)
+par(mfrow=c(2,2))
+plot(cc.m4)
+
+#linear regression analysis
+dav.m1<-lm(hu$shannon~hu$Average)
+summary(dav.m1)
+par(mfrow=c(2,2))
+plot(dav.m1)
+plot(hu$shannon~hu$Average)
+abline(dav.m1)
+ggplot(hu, aes(x=Average, y=shannon))+geom_point()+stat_smooth(method="lm",col="red")
+
+#dav.m1<-lm(hu$shannon~hu$Average)
+#ggplotRegression(dav.m1)
+dav.m2<-lm(hu$InsectPollinated~hu$Average)
+summary(dav.m2)
+par(mfrow=c(2,2))
+plot(dav.m2)
+80
+plot(hu$InsectPollinated~hu$Average)
+dav.m3<-lm(hu$BMonticola~hu$Average)
+summary(dav.m3)
+par(mfrow=c(2,2))
+plot(dav.m3)
+plot(hu$BMonticola~hu$Average)
+dav.m4<-lm(hu$flowering~hu$Average)
+summary(dav.m4)
+par(mfrow=c(2,2))
+plot(dav.m4)
+plot(hu$flowering~hu$Average)
+dav.m42<-lm(sqrt(hu$flowering)~hu$Average)
+summary(dav.m42)
+par(mfrow=c(2,2))
+plot(dav.m42)
+
+#removing mossy NVCs
+hu2<- hu %>% 
+filter(Code!="M7"&Code!="M4"&Code!="M6a"&Code!="M6b"&Code!="M6c"&Code!="M10")
+view(hu2)
+
+#ANOVA analysis since removing mossy NVCs
+cc.m6<-aov(hu2$shannon~factor(hu2$CorrieCode))
+summary(cc.m6)
+par(mfrow=c(2,2))
+plot(cc.m6)
+TukeyHSD(cc.m6)
+cc.m7<-aov(hu2$InsectPollinated~factor(hu2$CorrieCode))
+summary(cc.m7)
+par(mfrow=c(2,2))
+plot(cc.m2)
+TukeyHSD(cc.m7)
+cc.m8<-aov(hu2$BMonticola~factor(hu2$CorrieCode))
+summary(cc.m8)
+par(mfrow=c(2,2))
+plot(cc.m3)
+TukeyHSD(cc.m8)
+cc.m9<-aov(hu2$flowering~factor(hu2$CorrieCode))
+summary(cc.m9)
+par(mfrow=c(2,2))
+plot(cc.m4)
+TukeyHSD(cc.m9)
+
+#linear regression analysis since removing mossy NVCs
+dav.m5<-lm(hu2$shannon~hu2$Average)
+summary(dav.m5)
+par(mfrow=c(2,2))
+plot(dav.m5)
+dav.m6<-lm(hu2$InsectPollinated~hu2$Average)
+summary(dav.m6)
+par(mfrow=c(2,2))
+plot(dav.m6)
+dav.m62<-lm(sqrt(hu2$InsectPollinated)~hu2$Average)
+summary(dav.m62)
+par(mfrow=c(2,2))
+plot(dav.m62)
+dav.m7<-lm(hu2$BMonticola~hu2$Average)
+summary(dav.m7)
+par(mfrow=c(2,2))
+plot(dav.m7)
+dav.m8<-lm(hu2$flowering~hu2$Average)
+summary(dav.m8)
+par(mfrow=c(2,2))
+plot(dav.m8)
+dav.m82<-lm(sqrt(hu2$flowering)~hu2$Average)
+summary(dav.m82)
+par(mfrow=c(2,2))
+plot(dav.m82)
+
+#TukeyHSD(dav.m82)
+#Create ggplot
+library(ggplot2)
+ggplot(data=nvc.summary)+geom_point(mapping=aes(x=Code, y=shannon))
+base<- ggplot(data=nvc.summary)+geom_point(mapping=aes(x=Code, y=shannon, colour=Code))
+base + theme(legend.position = "bottom")+guides(colour = guide_legend(nrow = 3, override.aes = 
+list(size = 4)))
+base + theme(legend.position = "bottom")+guides(colour = guide_legend(nrow = 3))
+ggsave("my-plot.pdf")
+ggplot(data=subset(hu, 
+CorrieCode=="1"))+geom_histogram(aes(x=shannon,fill=..x..),binwidth=0.5)+scale_fill_viridis_c()
+ggplot(data=subset(hu, 
+CorrieCode=="2"))+geom_histogram(aes(x=shannon,fill=..x..),binwidth=0.5)+scale_fill_viridis_c()
+ggplot(data=subset(hu, 
+CorrieCode=="3"))+geom_histogram(aes(x=shannon,fill=..x..),binwidth=0.5)+scale_fill_viridis_c()
+ggplot(data=subset(hu, 
+CorrieCode=="4"))+geom_histogram(aes(x=shannon,fill=..x..),binwidth=0.5)+scale_fill_viridis_c()
