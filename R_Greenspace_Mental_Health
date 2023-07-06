@@ -1,0 +1,139 @@
+#Looking at relationship between university student access to greenspace and mental health.
+
+rm(list = ls()) 
+dev.off()
+
+#Set directory
+setwd<-(C:\Users\niamh\OneDrive - University of Edinburgh\PGGE11268 Applied Research Skills in Environment and Society\GP PROJECT)
+
+#install packages
+#install.packages("ggplot2")
+#install.packages("psych")
+#install.packages("scales")
+#install.packages("lessR")
+
+
+#packages used 
+library(ggplot2)
+library(psych)
+library(scales)
+library(lessR)
+
+#import data
+GSPCE<-read.csv("ANALYSIS.csv", header=TRUE)
+RANK<-read.csv("Rank.csv", header=TRUE)
+View(GSPCE)
+View(Rank)
+
+#Exploratory analysis
+summary(GSPCE)
+class(GSPCE$Allotments.Or.Community.Growing.Space)
+class(GSPCE$Q6)
+class(GSPCE$Q1)
+summary(Rank)
+
+#change column name for plot images
+colnames(GSPCE)[12] <- c("Time")
+colnames(GSPCE)[18] <- c("Access")
+colnames(GSPCE)[14] <- c("Greenspace_Categories")
+colnames(GSPCE)[13] <- c("Quality")
+colnames(GSPCE)[9] <- c("Q5_Reason")
+colnames(GSPCE)[17] <- c("Q41_Reason")
+colnames(GSPCE)[7] <- c("Q5_Answer")
+colnames(GSPCE)[15] <- c("Q41_Answer")
+colnames(GSPCE)[10] <- c("Ward")
+
+#Changing data to ordered factors
+GSPCE$Time<-ordered(GSPCE$Time, levels = c("0-3mins", "3-6mins", "6-9mins", "9+mins"))
+class(GSPCE$Time)
+GSPCE$Access<-as.factor(GSPCE$Access)
+class(GSPCE$Access)
+GSPCE$Greenspace_Categories <-as.factor(GSPCE$Greenspace_Categories)
+GSPCE$Q5_Reason<-ordered(GSPCE$Q5_Reason, levels = c("Distance", "Quality", "Distance & Quality", "Neither"))
+class(GSPCE$Q5_Reason)
+GSPCE$Q41_Reason<-ordered(GSPCE$Q41_Reason, levels = c(levels = c("Distance", "Quality", "Distance & Quality", "Neither")))
+class(GSPCE$Q41_Reason)
+GSPCE$Q5<-as.factor(GSPCE$Q5)
+class(GSPCE$Q5)
+GSPCE$Ward<-as.factor(GSPCE$Ward)
+class(GSPCE$Ward)
+class(GSPCE$Greenspace_Categories)
+GSPCE$Rank<-ordered(GSPCE$Rank, levels = c("1","2","3","4","5","6","7","8","9","10"))
+class(GSPCE$Rank)
+
+#descriptive stats
+#stacked barchart of greenspace rankings
+ggplot(data=RANK, aes(Greenspace))+
+  geom_bar(aes(fill = Rank))+labs(title="Rankings of Greenspace from the Perspective of Edinburgh City University Students",x="Edinburgh City Greenspaces", y = "Counts of Rankings")+theme(plot.title = element_text(hjust = 0.5))+scale_fill_viridis_d()
+
+#barplot of Time and Access variables
+ggplot(data=subset(GSPCE, !is.na(Time)), aes(Access))+
+  geom_bar(aes(fill = Time))+labs(title="Access to Greenspace Based on Walking Time",x="Access", y = "Number of Participants")+theme(plot.title = element_text(hjust = 0.5))+scale_fill_viridis_d()
+
+#barplot showing answers to question 5 
+ggplot(data=subset(GSPCE, !is.na(Q5_Answer)), aes(Q5_Reason))+
+  geom_bar(aes(fill = Q5_Answer))+scale_x_discrete(na.translate = FALSE)+labs(title="Students Answering if They Have Adequate Access to Greenspace and Why ",x="Reasoning", y = "Number of Participants")+theme(plot.title = element_text(hjust = 0.5))+scale_fill_viridis_d()
+
+#barplot showing answers to question 41
+ggplot(data=subset(GSPCE, !is.na(Q41_Answer)), aes(Q41_Reason))+
+  geom_bar(aes(fill = Q41_Answer))+scale_x_discrete(na.translate = FALSE)+labs(title="Students Answering if Their Closest Greenspace is of High-quality and Why ",x="Reasoning", y = "Number of Participants")+theme(plot.title = element_text(hjust = 0.5))+scale_fill_viridis_d()
+
+#barplot showing which greenspace categories students lived closest to in each ward 
+ggplot(data=subset(GSPCE, !is.na(Greenspace_Categories)), aes(Ward))+
+  geom_bar(aes(fill = Greenspace_Categories))+scale_x_discrete(na.translate = FALSE)+labs(title="Participants Closest Greenspaces in Each Ward",x="Wards", y="Number of Participants")+theme(plot.title = element_text(hjust = 0.5))+scale_fill_viridis_d()
+
+#Pie chart
+ggplot(data=subset(GSPCE, !is.na(Greenspace_Categories)), aes(x = "", fill = Greenspace_Categories)) + 
+    geom_bar(position = "fill", width = 1) + 
+    coord_polar(theta = "y") +
+    geom_text(aes(y = ((..count..)/sum(..count..)), label = scales::percent_format(accuracy = 1L)((..count..)/sum(..count..))), position = position_stack(vjust = 0.5), stat = "count")+
+  labs( 
+    title = "Categories of Greenspace that Participants Live Closest To",
+    x = "", 
+    y = ""
+  ) + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(data=subset(GSPCE, !is.na(Quality)), aes(x = "", fill = Quality)) + 
+  geom_bar(position = "fill", width = 1) + 
+  coord_polar(theta = "y") +
+  geom_text(aes(y = ((..count..)/sum(..count..)), label = scales::percent_format(accuracy = 1L)((..count..)/sum(..count..))), position = position_stack(vjust = 0.5), stat = "count")+
+  labs( 
+    title = "Percentage of Participants that Believe their Closest Greenspace is of High-quality",
+    x = "", 
+    y = ""
+  ) + theme(plot.title = element_text(hjust = 0.5))
+
+#fisher exact test
+#import separated dataset for this
+Access<-read.csv("Access.csv", header=TRUE)
+
+View(Access)
+
+#check classes
+class(Access$Actual_Time)
+class(Access$Actual_Access)
+Access$Actual_Time<-as.factor(Access$Actual_Time)
+class(Access$Actual_Time)
+Access$Actual_Access<-as.factor(Access$Actual_Access)
+class(Access$Actual_Access)
+
+#conduct fisher exact test
+fisher.test(Access$Actual_Time, Access$Actual_Access)
+table(Access$Actual_Time, Access$Actual_Access)
+
+#import separated dataset again for looking at quality
+Quality<-read.csv("Quality.csv", header=TRUE)
+View(Quality)
+class(Quality$Perceived_High_Quality)
+class(Quality$Actual_Time)
+Quality$Perceived_High_Quality<-as.factor(Quality$Perceived_High_Quality)
+class(Quality$Perceived_High_Quality)
+Quality$Actual_Time<-as.factor(Quality$Actual_Time)
+class(Quality$Actual_Time)
+
+#conduct test
+fisher.test(Quality$Perceived_High_Quality, Quality$Actual_Time)
+table(Quality$Perceived_High_Quality, Quality$Actual_Time)
+
+#Check version of R in use for reference
+R.version
